@@ -128,27 +128,60 @@ def run_ClassificationMinst_app():
                 else:
                     X = X_temp
 
-                # Allow user to select validation size
-                val_size = st.slider("🔹 Chọn % tỷ lệ tập validation (trong phần train)", min_value=10, max_value=50, value=20, step=5) / 100
-                X_train, X_val, y_train, y_val = train_test_split(X, y_temp, test_size=val_size, random_state=42)
+                # Sliders for train, validation, and test sizes
+                st.write("🔹 Chọn tỷ lệ cho các tập dữ liệu (tổng phải bằng 100%):")
+                
+                # Train size slider
+                train_size = st.slider(
+                    "Tỷ lệ tập huấn luyện (%)",
+                    min_value=10, max_value=80, value=60, step=5
+                ) / 100
+                
+                # Validation size slider (limited by remaining percentage after train)
+                max_val_size = 1.0 - train_size - 0.1  # Ensure at least 10% for test
+                val_size = st.slider(
+                    "Tỷ lệ tập validation (%)",
+                    min_value=10, max_value=int(max_val_size * 100), value=20, step=5
+                ) / 100
+                
+                # Test size is calculated as the remainder
+                test_size = 1.0 - train_size - val_size
+                
+                # Display the calculated test size and validate
+                st.write(f"Tỷ lệ tập kiểm tra (test): {test_size * 100:.0f}%")
+                if abs(train_size + val_size + test_size - 1.0) > 0.01:  # Allow small float precision error
+                    st.error("🚨 Tổng tỷ lệ không bằng 100%. Vui lòng điều chỉnh lại!")
+                else:
+                    # First split: separate test set
+                    X_temp, X_test, y_temp, y_test = train_test_split(
+                        X, y, test_size=test_size, random_state=42
+                    )
+                    
+                    # Second split: split remaining into train and validation
+                    val_size_adjusted = val_size / (train_size + val_size)  # Adjust val_size relative to train+val
+                    X_train, X_val, y_train, y_val = train_test_split(
+                        X_temp, y_temp, test_size=val_size_adjusted, random_state=42
+                    )
 
-                # Calculate split percentages
-                total_samples = X_temp.shape[0] + X_test.shape[0]
-                test_percent = (X_test.shape[0] / total_samples) * 100
-                val_percent = (X_val.shape[0] / total_samples) * 100
-                train_percent = (X_train.shape[0] / total_samples) * 100
+                    # Calculate and display split percentages
+                    total_samples = X.shape[0]
+                    train_percent = (X_train.shape[0] / total_samples) * 100
+                    val_percent = (X_val.shape[0] / total_samples) * 100
+                    test_percent = (X_test.shape[0] / total_samples) * 100
 
-                st.write(f"📊 **Tỷ lệ phân chia**: Test={test_percent:.0f}%, Validation={val_percent:.0f}%, Train={train_percent:.0f}%")
-                st.write("✅ Dữ liệu đã được xử lý và chia tách.")
-                st.write(f"🔹 Kích thước tập huấn luyện: `{X_train.shape}`")
-                st.write(f"🔹 Kích thước tập validation: `{X_val.shape}`")
-                st.write(f"🔹 Kích thước tập kiểm tra: `{X_test.shape}`")
+                    st.write(f"📊 **Tỷ lệ phân chia thực tế**: Train={train_percent:.0f}%, Validation={val_percent:.0f}%, Test={test_percent:.0f}%")
+                    st.write("✅ Dữ liệu đã được xử lý và chia tách.")
+                    st.write(f"🔹 Kích thước tập huấn luyện: `{X_train.shape}`")
+                    st.write(f"🔹 Kích thước tập validation: `{X_val.shape}`")
+                    st.write(f"🔹 Kích thước tập kiểm tra: `{X_test.shape}`")
 
-                # Store splits in session_state
-                st.session_state["X_train"] = X_train
-                st.session_state["y_train"] = y_train
-                st.session_state["X_val"] = X_val
-                st.session_state["y_val"] = y_val
+                    # Store splits in session_state
+                    st.session_state["X_train"] = X_train
+                    st.session_state["y_train"] = y_train
+                    st.session_state["X_val"] = X_val
+                    st.session_state["y_val"] = y_val
+                    st.session_state["X_test"] = X_test
+                    st.session_state["y_test"] = y_test
             else:
                 st.error("🚨 Dữ liệu chưa được nạp. Hãy tải dữ liệu trước.")
 
