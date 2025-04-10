@@ -85,46 +85,22 @@ def run_ClassificationMinst_app():
     tab_load, tab_preprocess,  tab_demo ,tab_mlflow= tabs
 
     with tab_load:
-        st.header("📂 Tải dữ liệu")
-        
-        # Tùy chọn: Tải từ URL hoặc từ file
-        data_source = st.radio("Chọn nguồn dữ liệu:", ("Tải từ URL", "Tải file CSV từ máy"))
 
-        if data_source == "Tải từ URL":
-            url = "http://bit.ly/4lltVkh"
-            if st.button("Tải dữ liệu từ URL"):
-                try:
-                    # Tải dữ liệu từ URL
-                    response = requests.get(url)
-                    response.raise_for_status()  # Kiểm tra lỗi HTTP
-                    data = pd.read_csv(io.StringIO(response.text))
-                    
-                    # Lưu dữ liệu vào session_state
-                    st.session_state["titanic_data"] = data
-                    st.success("✅ Dữ liệu Titanic đã được tải thành công từ URL!")
-                    
-                    # Hiển thị dữ liệu
-                    st.write("**Dữ liệu Titanic:**")
-                    st.dataframe(data.head())
-                except Exception as e:
-                    st.error(f"🚨 Lỗi khi tải dữ liệu từ URL: {e}")
-
-        else:  # Tải file từ máy
-            uploaded_file = st.file_uploader("📂 Chọn file CSV để tải lên (Titanic dataset)", type=["csv"])
-            if uploaded_file is not None:
-                try:
-                    # Đọc file CSV
-                    data = pd.read_csv(uploaded_file)
-                    
-                    # Lưu dữ liệu vào session_state
-                    st.session_state["titanic_data"] = data
-                    st.success("✅ Dữ liệu Titanic đã được tải thành công từ file!")
-                    
-                    # Hiển thị dữ liệu
-                    st.write("**Dữ liệu Titanic:**")
-                    st.dataframe(data.head())
-                except Exception as e:
-                    st.error(f"🚨 Lỗi khi đọc file CSV: {e}")
+        uploaded_file = st.file_uploader("📂 Chọn file CSV để tải lên ", type=["csv"])
+        if uploaded_file is not None:
+            try:
+                # Đọc file CSV
+                data = pd.read_csv(uploaded_file)
+                
+                # Lưu dữ liệu vào session_state
+                st.session_state["data"] = data
+                st.success("✅ Dữ liệu đã được tải thành công từ file!")
+                
+                # Hiển thị dữ liệu
+                st.write("**Dữ liệu:**")
+                st.dataframe(data.head())
+            except Exception as e:
+                st.error(f"🚨 Lỗi khi đọc file CSV: {e}")
 
 
 
