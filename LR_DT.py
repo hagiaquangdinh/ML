@@ -37,28 +37,20 @@ def load_mnist_data():
 
 
 def run_ClassificationMinst_app():
-    @st.cache_data  # Lưu cache để tránh load lại dữ liệu mỗi lần chạy lại Streamlit
-    def get_sampled_pixels(images, sample_size=100_000):
-        return np.random.choice(images.flatten(), sample_size, replace=False)
-
-    @st.cache_data  # Cache danh sách ảnh ngẫu nhiên
-    def get_random_indices(num_images, total_images):
-        return np.random.randint(0, total_images, size=num_images)
-
-    # Cấu hình Streamlit    
-    # st.set_page_config(page_title="Phân loại ảnh", layout="wide")
-    # Định nghĩa hàm để đọc file .idx
-    def load_mnist_images(filename):
-        with open(filename, 'rb') as f:
-            magic, num, rows, cols = struct.unpack('>IIII', f.read(16))
-            images = np.fromfile(f, dtype=np.uint8).reshape(num, rows, cols)
-        return images
-
-    def load_mnist_labels(filename):
-        with open(filename, 'rb') as f:
-            magic, num = struct.unpack('>II', f.read(8))
-            labels = np.fromfile(f, dtype=np.uint8)
-        return labels
+    # Load default data
+    X_text, y_text, X_geometric, y_geometric = load_mnist_data()
+    
+    # Use X_text, y_text as default test set (you can change to X_geometric, y_geometric if needed)
+    X_test = X_text
+    y_test = y_text
+    # For training, we can use a portion of X_text or combine datasets; here we split X_text
+    X_temp, X_test, y_temp, y_test = train_test_split(X_text, y_text, test_size=0.2, random_state=42)
+    
+    # Store in session_state for access across tabs
+    st.session_state["X_test"] = X_test
+    st.session_state["y_test"] = y_test
+    st.session_state["X_temp"] = X_temp
+    st.session_state["y_temp"] = y_temp
 
     # mlflow_tracking_uri = st.secrets["MLFLOW_TRACKING_URI"]
     # mlflow_username = st.secrets["MLFLOW_TRACKING_USERNAME"]
@@ -123,40 +115,42 @@ def run_ClassificationMinst_app():
 
         with st.expander("**Phân chia dữ liệu**", expanded=True):    
 
-            # Kiểm tra nếu dữ liệu đã được load
-            if "train_images" in st.session_state:
-                # Lấy dữ liệu từ session_state
-                train_images = st.session_state.train_images
-                train_labels = st.session_state.train_labels
-                test_images = st.session_state.test_images
-                test_labels = st.session_state.test_labels
+            if "X_temp" in st.session_state:
+                X_temp = st.session_state["X_temp"]
+                y_temp = st.session_state["y_temp"]
+                X_test = st.session_state["X_test"]
+                y_test = st.session_state["y_test"]
 
-                # Chuyển đổi dữ liệu thành vector 1 chiều
-                X = np.concatenate((train_images, test_images), axis=0)  # Gộp toàn bộ dữ liệu
-                y = np.concatenate((train_labels, test_labels), axis=0)
-                X = X.reshape(X.shape[0], -1)  # Chuyển thành vector 1 chiều
-                with mlflow.start_run():
+                # Reshape if necessary (assuming images are 28x28)
+                if len(X_temp.shape) == 3:
+                    X = X_temp.reshape(X_temp.shape[0], -1)
+                    X_test = X_test.reshape(X_test.shape[0], -1)
+                else:
+                    X = X_temp
 
-                    # Cho phép người dùng chọn tỷ lệ validation và test
-                    test_size = st.slider("🔹 Chọn % tỷ lệ tập test", min_value=10, max_value=50, value=20, step=5) / 100
-                    val_size = st.slider("🔹 Chọn % tỷ lệ tập validation (trong phần train)", min_value=10, max_value=50, value=20, step=5) / 100
+                # Allow user to select validation size
+                val_size = st.slider("🔹 Chọn % tỷ lệ tập validation (trong phần train)", min_value=10, max_value=50, value=20, step=5) / 100
+                X_train, X_val, y_train, y_val = train_test_split(X, y_temp, test_size=val_size, random_state=42)
 
-                    X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-                    val_size_adjusted = val_size / (1 - test_size)  # Điều chỉnh tỷ lệ val cho phần còn lại
-                    X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=val_size_adjusted, random_state=42)
+                # Calculate split percentages
+                total_samples = X_temp.shape[0] + X_test.shape[0]
+                test_percent = (X_test.shape[0] / total_samples) * 100
+                val_percent = (X_val.shape[0] / total_samples) * 100
+                train_percent = (X_train.shape[0] / total_samples) * 100
 
-                    # Tính tỷ lệ thực tế của từng tập
-                    total_samples = X.shape[0]
-                    test_percent = (X_test.shape[0] / total_samples) * 100
-                    val_percent = (X_val.shape[0] / total_samples) * 100
-                    train_percent = (X_train.shape[0] / total_samples) * 100
                 st.write(f"📊 **Tỷ lệ phân chia**: Test={test_percent:.0f}%, Validation={val_percent:.0f}%, Train={train_percent:.0f}%")
                 st.write("✅ Dữ liệu đã được xử lý và chia tách.")
                 st.write(f"🔹 Kích thước tập huấn luyện: `{X_train.shape}`")
                 st.write(f"🔹 Kích thước tập validation: `{X_val.shape}`")
                 st.write(f"🔹 Kích thước tập kiểm tra: `{X_test.shape}`")
+
+                # Store splits in session_state
+                st.session_state["X_train"] = X_train
+                st.session_state["y_train"] = y_train
+                st.session_state["X_val"] = X_val
+                st.session_state["y_val"] = y_val
             else:
-                st.error("🚨 Dữ liệu chưa được nạp. Hãy đảm bảo `train_images`, `train_labels` và `test_images` đã được tải trước khi chạy.")
+                st.error("🚨 Dữ liệu chưa được nạp. Hãy tải dữ liệu trước.")
 
         with st.expander("**Huấn luyện mô hình**", expanded=True):
             # Lựa chọn mô hình
