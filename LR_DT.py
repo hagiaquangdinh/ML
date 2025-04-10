@@ -23,6 +23,18 @@ from PIL import Image
 from sklearn.model_selection import KFold
 from collections import Counter
 from mlflow.tracking import MlflowClient
+# Khởi tạo mô hình Logistic Regression
+from sklearn.linear_model import LogisticRegression
+
+def load_mnist_data():
+    X_text = np.load("Data/alphabet_X.npy")
+    y_text = np.load("Data/alphabet_y.npy")
+    X_geometric = np.load("Data/geometric_X.npy")
+    y_geometric = np.load("Data/geometric_y.npy")
+    return X_text, y_text, X_geometric, y_geometric
+
+
+
 
 def run_ClassificationMinst_app():
     @st.cache_data  # Lưu cache để tránh load lại dữ liệu mỗi lần chạy lại Streamlit
@@ -86,7 +98,7 @@ def run_ClassificationMinst_app():
 
     with tab_load:
 
-        uploaded_file = st.file_uploader("📂 Chọn file CSV để tải lên ", type=["csv"])
+        uploaded_file = st.file_uploader("📂 Chọn file để tải lên ", type=["csv", "txt"])
         if uploaded_file is not None:
             try:
                 # Đọc file CSV
@@ -101,11 +113,14 @@ def run_ClassificationMinst_app():
                 st.dataframe(data.head())
             except Exception as e:
                 st.error(f"🚨 Lỗi khi đọc file CSV: {e}")
+        
 
 
 
     # 3️⃣ HUẤN LUYỆN MÔ HÌNH
     with tab_preprocess:
+        
+
         with st.expander("**Phân chia dữ liệu**", expanded=True):    
 
             # Kiểm tra nếu dữ liệu đã được load
@@ -149,7 +164,7 @@ def run_ClassificationMinst_app():
             if model_option == "Decision Tree":
                 st.subheader("🌳 Decision Tree Classifier")
                         
-                        # Lựa chọn tham số cho Decision Tree
+                # Lựa chọn tham số cho Decision Tree
                 # criterion = st.selectbox("Chọn tiêu chí phân nhánh:", (["entropy"]))
                 max_depth = st.slider("Chọn độ sâu tối đa của cây:", min_value=1, max_value=20, value=5)
                 st.session_state["dt_max_depth"] = max_depth
@@ -162,7 +177,7 @@ def run_ClassificationMinst_app():
                             dt_model = DecisionTreeClassifier( max_depth=max_depth, random_state=42)
 
                             # Thực hiện K-Fold Cross-Validation với số folds do người dùng chọn
-                            kf = st.slider("Số fold cho Cross-Validation:", 3, 10, 5)
+                            kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
                             cv_scores = []
 
                             progress_bar = st.progress(0)  # Khởi tạo thanh trạng thái ở 0%
@@ -231,8 +246,7 @@ def run_ClassificationMinst_app():
                 if st.button("🚀 Huấn luyện mô hình"):
                     with st.spinner("Đang huấn luyện mô hình..."):
                         with mlflow.start_run():
-                            # Khởi tạo mô hình Logistic Regression
-                            from sklearn.linear_model import LogisticRegression
+                            
                             lr_model = LogisticRegression(C=C, max_iter=1000, multi_class='multinomial', solver='lbfgs', random_state=42)
 
                             # Thực hiện K-Fold Cross-Validation
