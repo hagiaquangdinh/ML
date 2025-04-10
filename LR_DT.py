@@ -370,6 +370,7 @@ def run_ClassificationMinst_app():
     
             mlflow.set_experiment(experiment_name)
     
+    
             # Truy vấn các run trong experiment
             runs = client.search_runs(experiment_ids=[experiment_id])
     
