@@ -48,32 +48,30 @@ def run_ClassificationMinst_app():
             labels = np.fromfile(f, dtype=np.uint8)
         return labels
 
-    mlflow_tracking_uri = st.secrets["MLFLOW_TRACKING_URI"]
-    mlflow_username = st.secrets["MLFLOW_TRACKING_USERNAME"]
-    mlflow_password = st.secrets["MLFLOW_TRACKING_PASSWORD"]
+    # mlflow_tracking_uri = st.secrets["MLFLOW_TRACKING_URI"]
+    # mlflow_username = st.secrets["MLFLOW_TRACKING_USERNAME"]
+    # mlflow_password = st.secrets["MLFLOW_TRACKING_PASSWORD"]
     
-    # Thiết lập biến môi trường
-    os.environ["MLFLOW_TRACKING_URI"] = mlflow_tracking_uri
-    os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_username
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_password
+    # # Thiết lập biến môi trường
+    # os.environ["MLFLOW_TRACKING_URI"] = mlflow_tracking_uri
+    # os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_username
+    # os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_password
     
-    # Thiết lập MLflow (Đặt sau khi mlflow_tracking_uri đã có giá trị)
-    mlflow.set_tracking_uri(mlflow_tracking_uri)
+    # # Thiết lập MLflow (Đặt sau khi mlflow_tracking_uri đã có giá trị)
+    # mlflow.set_tracking_uri(mlflow_tracking_uri)
 
+    # # Định nghĩa đường dẫn đến các file MNIST
+    # dataset_path = os.path.dirname(os.path.abspath(__file__)) 
+    # train_images_path = os.path.join(dataset_path, "train-images.idx3-ubyte")
+    # train_labels_path = os.path.join(dataset_path, "train-labels.idx1-ubyte")
+    # test_images_path = os.path.join(dataset_path, "t10k-images.idx3-ubyte")
+    # test_labels_path = os.path.join(dataset_path, "t10k-labels.idx1-ubyte")
 
-
-    # Định nghĩa đường dẫn đến các file MNIST
-    dataset_path = os.path.dirname(os.path.abspath(__file__)) 
-    train_images_path = os.path.join(dataset_path, "train-images.idx3-ubyte")
-    train_labels_path = os.path.join(dataset_path, "train-labels.idx1-ubyte")
-    test_images_path = os.path.join(dataset_path, "t10k-images.idx3-ubyte")
-    test_labels_path = os.path.join(dataset_path, "t10k-labels.idx1-ubyte")
-
-    # Tải dữ liệu
-    train_images = load_mnist_images(train_images_path)
-    train_labels = load_mnist_labels(train_labels_path)
-    test_images = load_mnist_images(test_images_path)
-    test_labels = load_mnist_labels(test_labels_path)
+    # # Tải dữ liệu
+    # train_images = load_mnist_images(train_images_path)
+    # train_labels = load_mnist_labels(train_labels_path)
+    # test_images = load_mnist_images(test_images_path)
+    # test_labels = load_mnist_labels(test_labels_path)
 
     # Giao diện Streamlit
     st.title("My Application Name")
@@ -188,7 +186,7 @@ def run_ClassificationMinst_app():
                             dt_model = DecisionTreeClassifier( max_depth=max_depth, random_state=42)
 
                             # Thực hiện K-Fold Cross-Validation với số folds do người dùng chọn
-                            kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+                            kf = st.slider("Số fold cho Cross-Validation:", 3, 10, 5)
                             cv_scores = []
 
                             progress_bar = st.progress(0)  # Khởi tạo thanh trạng thái ở 0%
@@ -262,7 +260,8 @@ def run_ClassificationMinst_app():
                             lr_model = LogisticRegression(C=C, max_iter=1000, multi_class='multinomial', solver='lbfgs', random_state=42)
 
                             # Thực hiện K-Fold Cross-Validation
-                            kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+                            kf = st.slider("Số fold cho Cross-Validation:", 3, 10, 5)
+
                             cv_scores = []
 
                             progress_bar = st.progress(0)
@@ -382,7 +381,7 @@ def run_ClassificationMinst_app():
         st.header("Thông tin Huấn luyện & MLflow UI")
         try:
             client = MlflowClient()
-            experiment_name = "Classification"
+            experiment_name = "Application"
     
             # Kiểm tra nếu experiment đã tồn tại
             experiment = client.get_experiment_by_name(experiment_name)
@@ -474,15 +473,4 @@ def run_ClassificationMinst_app():
 
 if __name__ == "__main__":
     run_ClassificationMinst_app()
-    # st.write(f"MLflow Tracking URI: {mlflow.get_tracking_uri()}")
-    # print("🎯 Kiểm tra trên DagsHub: https://dagshub.com/Dung2204/MINST.mlflow/")
-    # # # cd "C:\Users\Dell\OneDrive\Pictures\Documents\Code\python\OpenCV\HMVPYTHON\App"
-    # ClassificationMinst.
     
-
-
-
-    ## thay vì decision tree là gini và entropy thì -> chỉ còn entropy với chọn độ sâu của cây
-    ## bổ sung thêm Chọn số folds (KFold Cross-Validation) ở cả 2 phần decsion tree và svms
-    ## cập nhật lại phần demo , vì nó đang không sử dụng dữ liệu ở phần huấn luyện
-  
