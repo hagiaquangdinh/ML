@@ -88,16 +88,21 @@ def run_ClassificationMinst_app():
     # tab_info, tab_load, tab_preprocess, tab_split,  tab_demo, tab_log_info = tabs
     tab_load, tab_preprocess,  tab_demo ,tab_mlflow= tabs
 
+   
     with tab_load:
-
         uploaded_file = st.file_uploader("📂 Chọn file để tải lên ", type=["csv", "txt"])
         if uploaded_file is not None:
             try:
                 # Đọc file CSV
                 data = pd.read_csv(uploaded_file)
                 
+                # Giả sử cột cuối cùng là nhãn (y), các cột còn lại là đặc trưng (X)
+                X = data.iloc[:, :-1].values  # Đặc trưng
+                y = data.iloc[:, -1].values   # Nhãn
+                
                 # Lưu dữ liệu vào session_state
-                st.session_state["data"] = data
+                st.session_state["X"] = X
+                st.session_state["y"] = y
                 st.success("✅ Dữ liệu đã được tải thành công từ file!")
                 
                 # Hiển thị dữ liệu
@@ -105,65 +110,48 @@ def run_ClassificationMinst_app():
                 st.dataframe(data.head())
             except Exception as e:
                 st.error(f"🚨 Lỗi khi đọc file CSV: {e}")
-        
+            
 
 
 
     # 3️⃣ HUẤN LUYỆN MÔ HÌNH
     with tab_preprocess:
-        
-
         with st.expander("**Phân chia dữ liệu**", expanded=True):    
+            if "X" in st.session_state and "y" in st.session_state:
+                X = st.session_state["X"]
+                y = st.session_state["y"]
 
-            if "X_temp" in st.session_state:
-                X_temp = st.session_state["X_temp"]
-                y_temp = st.session_state["y_temp"]
-                X_test = st.session_state["X_test"]
-                y_test = st.session_state["y_test"]
+                # Reshape nếu cần (giả sử dữ liệu không phải ảnh, không cần reshape như MNIST)
+                if len(X.shape) > 2:  # Nếu dữ liệu có dạng ảnh (3D)
+                    X = X.reshape(X.shape[0], -1)
 
-                # Reshape if necessary (assuming images are 28x28)
-                if len(X_temp.shape) == 3:
-                    X = X_temp.reshape(X_temp.shape[0], -1)
-                    X_test = X_test.reshape(X_test.shape[0], -1)
-                else:
-                    X = X_temp
-
-                # Sliders for train, validation, and test sizes
+                # Sliders cho tỷ lệ phân chia
                 st.write("🔹 Chọn tỷ lệ cho các tập dữ liệu (tổng phải bằng 100%):")
-                
-                # Train size slider
                 train_size = st.slider(
                     "Tỷ lệ tập huấn luyện (%)",
                     min_value=10, max_value=80, value=60, step=5
                 ) / 100
-                
-                # Validation size slider (limited by remaining percentage after train)
-                max_val_size = 1.0 - train_size - 0.1  # Ensure at least 10% for test
+                max_val_size = 1.0 - train_size - 0.1
                 val_size = st.slider(
                     "Tỷ lệ tập validation (%)",
                     min_value=10, max_value=int(max_val_size * 100), value=20, step=5
                 ) / 100
-                
-                # Test size is calculated as the remainder
                 test_size = 1.0 - train_size - val_size
-                
-                # Display the calculated test size and validate
+
                 st.write(f"Tỷ lệ tập kiểm tra (test): {test_size * 100:.0f}%")
-                if abs(train_size + val_size + test_size - 1.0) > 0.01:  # Allow small float precision error
+                if abs(train_size + val_size + test_size - 1.0) > 0.01:
                     st.error("🚨 Tổng tỷ lệ không bằng 100%. Vui lòng điều chỉnh lại!")
                 else:
-                    # First split: separate test set
+                    # Phân chia dữ liệu
                     X_temp, X_test, y_temp, y_test = train_test_split(
                         X, y, test_size=test_size, random_state=42
                     )
-                    
-                    # Second split: split remaining into train and validation
-                    val_size_adjusted = val_size / (train_size + val_size)  # Adjust val_size relative to train+val
+                    val_size_adjusted = val_size / (train_size + val_size)
                     X_train, X_val, y_train, y_val = train_test_split(
                         X_temp, y_temp, test_size=val_size_adjusted, random_state=42
                     )
 
-                    # Calculate and display split percentages
+                    # Hiển thị kết quả phân chia
                     total_samples = X.shape[0]
                     train_percent = (X_train.shape[0] / total_samples) * 100
                     val_percent = (X_val.shape[0] / total_samples) * 100
@@ -175,7 +163,7 @@ def run_ClassificationMinst_app():
                     st.write(f"🔹 Kích thước tập validation: `{X_val.shape}`")
                     st.write(f"🔹 Kích thước tập kiểm tra: `{X_test.shape}`")
 
-                    # Store splits in session_state
+                    # Lưu dữ liệu đã phân chia vào session_state
                     st.session_state["X_train"] = X_train
                     st.session_state["y_train"] = y_train
                     st.session_state["X_val"] = X_val
@@ -183,158 +171,77 @@ def run_ClassificationMinst_app():
                     st.session_state["X_test"] = X_test
                     st.session_state["y_test"] = y_test
             else:
-                st.error("🚨 Dữ liệu chưa được nạp. Hãy tải dữ liệu trước.")
+                st.error("🚨 Dữ liệu chưa được nạp. Hãy tải dữ liệu trước từ tab 'Tiền Xử lý dữ liệu'.")
 
         with st.expander("**Huấn luyện mô hình**", expanded=True):
-            # Lựa chọn mô hình
-            model_option = st.radio("🔹 Chọn mô hình huấn luyện:", ("Decision Tree", "SVM"))
-            if model_option == "Decision Tree":
-                st.subheader("🌳 Decision Tree Classifier")
-                        
-                # Lựa chọn tham số cho Decision Tree
-                # criterion = st.selectbox("Chọn tiêu chí phân nhánh:", (["entropy"]))
-                max_depth = st.slider("Chọn độ sâu tối đa của cây:", min_value=1, max_value=20, value=5)
-                st.session_state["dt_max_depth"] = max_depth
-                n_folds = st.slider("Chọn số folds cho K-Fold Cross-Validation:", min_value=2, max_value=10, value=5)
+            if "X_train" in st.session_state:
+                X_train = st.session_state["X_train"]
+                y_train = st.session_state["y_train"]
+                X_val = st.session_state["X_val"]
+                y_val = st.session_state["y_val"]
 
-                if st.button("🚀 Huấn luyện mô hình"):
-                    with st.spinner("Đang huấn luyện mô hình..."):
-                        with mlflow.start_run():
-                            # Khởi tạo mô hình Decision Tree
-                            dt_model = DecisionTreeClassifier( max_depth=max_depth, random_state=42)
+                model_option = st.radio("🔹 Chọn mô hình huấn luyện:", ("Decision Tree", "SVM"))
+                if model_option == "Decision Tree":
+                    st.subheader("🌳 Decision Tree Classifier")
+                    max_depth = st.slider("Chọn độ sâu tối đa của cây:", min_value=1, max_value=20, value=5)
+                    n_folds = st.slider("Chọn số folds cho K-Fold Cross-Validation:", min_value=2, max_value=10, value=5)
 
-                            # Thực hiện K-Fold Cross-Validation với số folds do người dùng chọn
-                            kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
-                            cv_scores = []
+                    if st.button("🚀 Huấn luyện mô hình"):
+                        with st.spinner("Đang huấn luyện mô hình..."):
+                            with mlflow.start_run():
+                                dt_model = DecisionTreeClassifier(max_depth=max_depth, random_state=42)
+                                kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+                                cv_scores = []
 
-                            progress_bar = st.progress(0)  # Khởi tạo thanh trạng thái ở 0%
-                            progress_text = st.empty()  # Tạo một vùng trống để hiển thị % tiến trình
-                            total_folds = n_folds
+                                progress_bar = st.progress(0)
+                                progress_text = st.empty()
+                                total_folds = n_folds
 
-                            for i, (train_index, val_index) in enumerate(kf.split(X_train)):
-                                X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
-                                y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+                                for i, (train_index, val_index) in enumerate(kf.split(X_train)):
+                                    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+                                    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+                                    dt_model.fit(X_train_fold, y_train_fold)
+                                    y_val_pred_fold = dt_model.predict(X_val_fold)
+                                    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_fold)
+                                    cv_scores.append(fold_accuracy)
 
-                                # Huấn luyện mô hình trên fold hiện tại
-                                dt_model.fit(X_train_fold, y_train_fold)
-                                # Dự đoán và tính độ chính xác trên tập validation của fold
-                                y_val_pred_fold = dt_model.predict(X_val_fold)
-                                fold_accuracy = accuracy_score(y_val_fold, y_val_pred_fold)
-                                cv_scores.append(fold_accuracy)
+                                    progress = (i + 1) / total_folds
+                                    progress_bar.progress(progress)
+                                    progress_text.text(f"Tiến trình huấn luyện: {int(progress * 100)}%")
 
-                                # Cập nhật thanh trạng thái và hiển thị phần trăm
-                                progress = (i + 1) / total_folds  # Tính phần trăm hoàn thành
-                                progress_bar.progress(progress)  # Cập nhật thanh trạng thái
-                                progress_text.text(f"Tiến trình huấn luyện: {int(progress * 100)}%")  # Hiển thị % cụ thể
+                                mean_cv_accuracy = np.mean(cv_scores)
+                                std_cv_accuracy = np.std(cv_scores)
 
-                            # Tính độ chính xác trung bình từ cross-validation
-                            mean_cv_accuracy = np.mean(cv_scores)
-                            std_cv_accuracy = np.std(cv_scores)  # Độ lệch chuẩn để đánh giá độ ổn định
+                                dt_model.fit(X_train, y_train)
+                                y_val_pred_dt = dt_model.predict(X_val)
+                                accuracy_dt = accuracy_score(y_val, y_val_pred_dt)
 
-                            # Huấn luyện mô hình trên toàn bộ X_train, y_train để sử dụng sau này
-                            dt_model.fit(X_train, y_train)
-                            y_val_pred_dt = dt_model.predict(X_val)
-                            accuracy_dt = accuracy_score(y_val, y_val_pred_dt)
+                                mlflow.log_param("model_type", "Decision Tree")
+                                mlflow.log_param("max_depth", max_depth)
+                                mlflow.log_param("n_folds", n_folds)
+                                mlflow.log_metric("mean_cv_accuracy", mean_cv_accuracy)
+                                mlflow.log_metric("std_cv_accuracy", std_cv_accuracy)
+                                mlflow.log_metric("accuracy", accuracy_dt)
+                                mlflow.sklearn.log_model(dt_model, "decision_tree_model")
 
-                            # Ghi log vào MLflow
-                            mlflow.log_param("model_type", "Decision Tree")
-                        
-                            mlflow.log_param("max_depth", max_depth)
-                            mlflow.log_param("n_folds", n_folds)  # Ghi số folds do người dùng chọn
-                            mlflow.log_metric("mean_cv_accuracy", mean_cv_accuracy)
-                            mlflow.log_metric("std_cv_accuracy", std_cv_accuracy)
-                            mlflow.log_metric("accuracy", accuracy_dt)
-                            mlflow.sklearn.log_model(dt_model, "decision_tree_model")
+                                st.session_state["selected_model_type"] = "Decision Tree"
+                                st.session_state["trained_model"] = dt_model 
+                                st.session_state["X_train"] = X_train 
+                                st.session_state["dt_max_depth"] = max_depth
+                                st.session_state["n_folds"] = n_folds 
 
-                            # Lưu vào session_state
-                            st.session_state["selected_model_type"] = "Decision Tree"
-                            st.session_state["trained_model"] = dt_model 
-                            st.session_state["X_train"] = X_train 
-                            st.session_state["dt_max_depth"] = max_depth
-                            st.session_state["n_folds"] = n_folds 
-
-                    
-                            st.markdown("---") 
-                            st.write(f"🔹Mô hình được chọn để đánh giá: `{model_option}`")
-                            st.write("🔹 Tham số mô hình:")
-                            st.write(f"- **Độ sâu tối đa**: `{max_depth}`")
-                            st.write(f"- **Số folds trong Cross-Validation**: `{n_folds}`")
-                            st.write(f"✅ **Độ chính xác trung bình từ K-Fold Cross-Validation ({n_folds} folds):** `{mean_cv_accuracy:.4f} ± {std_cv_accuracy:.4f}`")
-                            st.write(f"✅ **Độ chính xác trên tập validation:** `{accuracy_dt:.4f}`")
-                            
-                        mlflow.end_run()
-            elif model_option == "Logistic Regression":
-                st.subheader("📈 Logistic Regression")
-                
-                # Lựa chọn tham số cho Logistic Regression
-                C = st.slider("Chọn giá trị C (nghịch đảo của mức độ regularization):", min_value=0.01, max_value=10.0, value=1.0)
-                n_folds = st.slider("Chọn số folds cho K-Fold Cross-Validation:", min_value=2, max_value=10, value=5)
-                
-                if st.button("🚀 Huấn luyện mô hình"):
-                    with st.spinner("Đang huấn luyện mô hình..."):
-                        with mlflow.start_run():
-                            
-                            lr_model = LogisticRegression(C=C, max_iter=1000, multi_class='multinomial', solver='lbfgs', random_state=42)
-
-                            # Thực hiện K-Fold Cross-Validation
-                            kf = st.slider("Số fold cho Cross-Validation:", 3, 10, 5)
-
-                            cv_scores = []
-
-                            progress_bar = st.progress(0)
-                            progress_text = st.empty()
-                            total_folds = n_folds
-
-                            for i, (train_index, val_index) in enumerate(kf.split(X_train)):
-                                X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
-                                y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
-
-                                # Huấn luyện mô hình trên fold hiện tại
-                                lr_model.fit(X_train_fold, y_train_fold)
-                                y_val_pred_fold = lr_model.predict(X_val_fold)
-                                fold_accuracy = accuracy_score(y_val_fold, y_val_pred_fold)
-                                cv_scores.append(fold_accuracy)
-
-                                # Cập nhật thanh trạng thái
-                                progress = (i + 1) / total_folds
-                                progress_bar.progress(progress)
-                                progress_text.text(f"Tiến trình huấn luyện: {int(progress * 100)}%")
-
-                            # Tính độ chính xác trung bình từ cross-validation
-                            mean_cv_accuracy = np.mean(cv_scores)
-                            std_cv_accuracy = np.std(cv_scores)
-
-                            # Huấn luyện mô hình trên toàn bộ X_train
-                            lr_model.fit(X_train, y_train)
-                            y_val_pred_lr = lr_model.predict(X_val)
-                            accuracy_lr = accuracy_score(y_val, y_val_pred_lr)
-
-                            # Ghi log vào MLflow
-                            mlflow.log_param("model_type", "Logistic Regression")
-                            mlflow.log_param("C_value", C)
-                            mlflow.log_param("n_folds", n_folds)
-                            mlflow.log_metric("mean_cv_accuracy", mean_cv_accuracy)
-                            mlflow.log_metric("std_cv_accuracy", std_cv_accuracy)
-                            mlflow.log_metric("accuracy", accuracy_lr)
-                            mlflow.sklearn.log_model(lr_model, "logistic_regression_model")
-
-                            # Lưu vào session_state
-                            st.session_state["selected_model_type"] = "Logistic Regression"
-                            st.session_state["trained_model"] = lr_model
-                            st.session_state["X_train"] = X_train
-                            st.session_state["lr_C"] = C
-                            st.session_state["n_folds"] = n_folds
-
-                            st.markdown("---")
-                            st.write(f"🔹 Mô hình được chọn để đánh giá: `{model_option}`")
-                            st.write("🔹 **Tham số mô hình:**")
-                            st.write(f"- C (Regularization): `{C}`")
-                            st.write(f"- **Số folds trong Cross-Validation**: `{n_folds}`")
-                            st.write(f"✅ **Độ chính xác trung bình từ K-Fold Cross-Validation ({n_folds} folds):** `{mean_cv_accuracy:.4f} ± {std_cv_accuracy:.4f}`")
-                            st.write(f"✅ **Độ chính xác trên tập validation:** `{accuracy_lr:.4f}`")
-
-                        mlflow.end_run()
-    
+                                st.markdown("---") 
+                                st.write(f"🔹Mô hình được chọn để đánh giá: `{model_option}`")
+                                st.write("🔹 Tham số mô hình:")
+                                # personalised_write(f"- **Độ sâu tối đa**: `{max_depth}`")
+                                st.write(f"- **Số folds trong Cross-Validation**: `{n_folds}`")
+                                st.write(f"✅ **Độ chính xác trung bình từ K-Fold Cross-Validation ({n_folds} folds):** `{mean_cv_accuracy:.4f} ± {std_cv_accuracy:.4f}`")
+                                st.write(f"✅ **Độ chính xác trên tập validation:** `{accuracy_dt:.4f}`")
+                            mlflow.end_run()
+                # Thêm logic tương tự cho các mô hình khác (SVM, Logistic Regression) nếu cần
+            else:
+                st.error("🚨 Dữ liệu chưa được phân chia. Hãy thực hiện phân chia dữ liệu trước.")
+        
 
     with tab_demo:   
         with st.expander("**Dự đoán kết quả**", expanded=True):
