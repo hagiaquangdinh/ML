@@ -156,6 +156,7 @@ def run_ClassificationMinst_app():
                     train_percent = (X_train.shape[0] / total_samples) * 100
                     val_percent = (X_val.shape[0] / total_samples) * 100
                     test_percent = (X_test.shape[0] / total_samples) * 100
+                    
 
                     st.write(f"📊 **Tỷ lệ phân chia thực tế**: Train={train_percent:.0f}%, Validation={val_percent:.0f}%, Test={test_percent:.0f}%")
                     st.write("✅ Dữ liệu đã được xử lý và chia tách.")
