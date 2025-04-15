@@ -26,7 +26,7 @@ from mlflow.tracking import MlflowClient
 # Khởi tạo mô hình Logistic Regression
 from sklearn.linear_model import LogisticRegression
 
-def load_mnist_data():
+def load_data():
     X_text = np.load("Data/alphabet_X.npy")
     y_text = np.load("Data/alphabet_y.npy")
     X_geometric = np.load("Data/geometric_X.npy")
@@ -38,19 +38,16 @@ def load_mnist_data():
 
 def run_ClassificationMinst_app():
     # Load default data
-    X_text, y_text, X_geometric, y_geometric = load_mnist_data()
+    X_text, y_text, X_geometric, y_geometric = load_data()
     
-    # Use X_text, y_text as default test set (you can change to X_geometric, y_geometric if needed)
-    X_test = X_text
-    y_test = y_text
     # For training, we can use a portion of X_text or combine datasets; here we split X_text
-    X_temp, X_test, y_temp, y_test = train_test_split(X_text, y_text, test_size=0.2, random_state=42)
+    X_text, X_geometric, y_text, y_geometric = train_test_split(X_text, y_text, test_size=0.2, random_state=42)
     
     # Store in session_state for access across tabs
-    st.session_state["X_test"] = X_test
-    st.session_state["y_test"] = y_test
-    st.session_state["X_temp"] = X_temp
-    st.session_state["y_temp"] = y_temp
+    st.session_state["X_test"] = X_text
+    st.session_state["y_test"] = y_text
+    st.session_state["X_temp"] = X_geometric
+    st.session_state["y_temp"] = y_geometric
 
     # mlflow_tracking_uri = st.secrets["MLFLOW_TRACKING_URI"]
     # mlflow_username = st.secrets["MLFLOW_TRACKING_USERNAME"]
@@ -90,27 +87,50 @@ def run_ClassificationMinst_app():
 
    
     with tab_load:
-        uploaded_file = st.file_uploader("📂 Chọn file để tải lên ", type=["csv", "txt"])
-        if uploaded_file is not None:
-            try:
-                # Đọc file CSV
-                data = pd.read_csv(uploaded_file)
+        st.subheader("Chọn dữ liệu đầu vào")
+        data_option = st.radio(
+            "Chọn loại dữ liệu:",
+            ("Dữ liệu chữ cái (Text)", "Dữ liệu hình học (Geometric)", "Tải lên từ file CSV")
+        )
+
+        if data_option == "Dữ liệu chữ cái (Text)":
+            st.info("Đang sử dụng dữ liệu chữ cái.")
+            X = X_text
+            y = y_text
+            st.session_state["uploaded_data_type"] = "text"
+            st.session_state["X_original"] = X
+            st.session_state["y_original"] = y
+            st.success(f"✅ Đã tải dữ liệu chữ cái với kích thước: {X.shape}")
+        elif data_option == "Dữ liệu hình học (Geometric)":
+            st.info("Đang sử dụng dữ liệu hình học.")
+            X = X_geometric
+            y = y_geometric
+            st.session_state["uploaded_data_type"] = "geometric"
+            st.session_state["X_original"] = X
+            st.session_state["y_original"] = y
+            st.success(f"✅ Đã tải dữ liệu hình học với kích thước: {X.shape}")
+        elif data_option == "Tải lên từ file CSV":
+            uploaded_file = st.file_uploader("📂 Chọn file để tải lên ", type=["csv", "txt"])
+            if uploaded_file is not None:
+                try:
+                    # Đọc file CSV
+                    data = pd.read_csv(uploaded_file)
+                    
+                    # Giả sử cột cuối cùng là nhãn (y), các cột còn lại là đặc trưng (X)
+                    X = data.iloc[:, :-1].values  # Đặc trưng
+                    y = data.iloc[:, -1].values   # Nhãn
+                    
+                    # Lưu dữ liệu vào session_state
+                    st.session_state["X"] = X
+                    st.session_state["y"] = y
+                    st.success("✅ Dữ liệu đã được tải thành công từ file!")
+                    
+                    # Hiển thị dữ liệu
+                    st.write("**Dữ liệu:**")
+                    st.dataframe(data.head())
+                except Exception as e:
+                    st.error(f"🚨 Lỗi khi đọc file CSV: {e}")
                 
-                # Giả sử cột cuối cùng là nhãn (y), các cột còn lại là đặc trưng (X)
-                X = data.iloc[:, :-1].values  # Đặc trưng
-                y = data.iloc[:, -1].values   # Nhãn
-                
-                # Lưu dữ liệu vào session_state
-                st.session_state["X"] = X
-                st.session_state["y"] = y
-                st.success("✅ Dữ liệu đã được tải thành công từ file!")
-                
-                # Hiển thị dữ liệu
-                st.write("**Dữ liệu:**")
-                st.dataframe(data.head())
-            except Exception as e:
-                st.error(f"🚨 Lỗi khi đọc file CSV: {e}")
-            
 
 
 
@@ -156,7 +176,7 @@ def run_ClassificationMinst_app():
                     train_percent = (X_train.shape[0] / total_samples) * 100
                     val_percent = (X_val.shape[0] / total_samples) * 100
                     test_percent = (X_test.shape[0] / total_samples) * 100
-                    
+
 
                     st.write(f"📊 **Tỷ lệ phân chia thực tế**: Train={train_percent:.0f}%, Validation={val_percent:.0f}%, Test={test_percent:.0f}%")
                     st.write("✅ Dữ liệu đã được xử lý và chia tách.")
