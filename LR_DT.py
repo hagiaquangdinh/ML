@@ -25,6 +25,19 @@ from collections import Counter
 from mlflow.tracking import MlflowClient
 # Khởi tạo mô hình Logistic Regression
 from sklearn.linear_model import LogisticRegression
+# Kiểm tra xem TensorFlow/Keras có khả dụng không
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Dense, Conv2D, MaxPooling2D, Flatten, Dropout
+    from tensorflow.keras.utils import to_categorical
+    from tensorflow.keras.callbacks import Callback # Để tạo callback cho Streamlit
+    KERAS_AVAILABLE = True
+except ImportError:
+    KERAS_AVAILABLE = False
+    # Không cảnh báo ở đây, sẽ cảnh báo khi người dùng chọn CNN mà không có Keras
+
+
 
 def load_data():
     X_text = np.load("Data/alphabet_X.npy")
@@ -121,6 +134,7 @@ def run_ClassificationMinst_app():
                     y = data.iloc[:, -1].values   # Nhãn
                     
                     # Lưu dữ liệu vào session_state
+                    st.session_state["uploaded_data_type"] = "csv"
                     st.session_state["X"] = X
                     st.session_state["y"] = y
                     st.success("✅ Dữ liệu đã được tải thành công từ file!")
@@ -207,6 +221,8 @@ def run_ClassificationMinst_app():
             else:
                 st.error("🚨 Dữ liệu chưa được nạp. Hãy tải dữ liệu trước từ tab 'Tiền Xử lý dữ liệu'.")
 
+        
+
         with st.expander("**Huấn luyện mô hình**", expanded=True):
             if "X_train" in st.session_state:
                 X_train = st.session_state["X_train"]
@@ -215,6 +231,26 @@ def run_ClassificationMinst_app():
                 y_test = st.session_state["y_test"]
                 X_val = st.session_state["X_val"]
                 y_val = st.session_state["y_val"]
+
+                data_type = st.session_state.get("uploaded_data_type", "csv") # Lấy loại dữ liệu từ session_state
+
+                if data_type == "csv":
+                    available_models = ("Decision Tree", "Logistic Regression")
+                    st.info("Dữ liệu CSV: Chọn Decision Tree hoặc Logistic Regression.")
+                elif data_type in ["text", "geometric"] and KERAS_AVAILABLE:
+                    available_models = ("SVM", "CNN") # Ưu tiên SVM nhanh hơn trước
+                    st.info("Dữ liệu ảnh (Text/Geometric): Chọn SVM hoặc CNN.")
+                elif data_type in ["text", "geometric"] and not KERAS_AVAILABLE:
+                    available_models = ("SVM",) # Chỉ có SVM nếu Keras lỗi
+                    st.warning("Keras không khả dụng, chỉ có thể chọn SVM.")
+                else: # Trường hợp không xác định
+                    available_models = ()
+                    st.error("Không xác định được loại dữ liệu hoặc model phù hợp.")
+
+                if not available_models:
+                    st.stop() # Dừng nếu không có model nào khả dụng
+
+
 
                 model_option = st.radio("🔹 Chọn mô hình huấn luyện:", ("Decision Tree", "Logictic Regression"))
                 if model_option == "Decision Tree":
@@ -336,6 +372,47 @@ def run_ClassificationMinst_app():
                                 st.write(f"✅ **Độ chính xác trung bình từ K-Fold Cross-Validation ({n_folds} folds):** `{mean_cv_accuracy:.4f} ± {std_cv_accuracy:.4f}`")
                                 st.write(f"✅ **Độ chính xác trên tập validation:** `{accuracy_lr:.4f}`")
                             mlflow.end_run()
+                elif model_option == "SVM":
+                    st.markdown("#### 🤖 Support Vector Machine (SVM)")
+                    C_svm = st.select_slider("Tham số điều chuẩn (C):", options=[0.1, 1.0, 10.0, 100.0], value=1.0)
+                    kernel = st.selectbox("Kernel:", ("rbf", "linear", "poly", "sigmoid"), index=0)
+                    gamma = "scale"
+                    degree = 3
+                    if kernel in ["rbf", "poly", "sigmoid"]:
+                        gamma = st.select_slider("Gamma:", options=["scale", "auto", 0.001, 0.01, 0.1, 1], value="scale")
+                    if kernel == "poly":
+                        degree = st.slider("Degree (cho kernel poly):", 2, 5, 3)
+                    probability_svm = st.checkbox("Tính xác suất dự đoán (chậm hơn)", value=False)
+
+                    # K-Fold cho SVM có thể rất chậm, nên mặc định không dùng
+                    # use_kfold_svm = st.checkbox("Sử dụng K-Fold (RẤT CHẬM với SVM!)", value=False)
+
+                    if st.button(f"🚀 Huấn luyện {model_option}"):
+                        with st.spinner("Đang huấn luyện SVM (có thể mất vài phút)..."):
+                            with mlflow.start_run(run_name=f"SVM_{kernel}_C{C_svm}"):
+                                svm_model = SVC(C=C_svm, kernel=kernel, gamma=gamma, degree=degree, probability=probability_svm, random_state=42)
+                                mlflow.log_param("model_type", "SVM")
+                                mlflow.log_param("C", C_svm)
+                                mlflow.log_param("kernel", kernel)
+                                mlflow.log_param("gamma", gamma)
+                                if kernel == 'poly':
+                                    mlflow.log_param("degree", degree)
+                                mlflow.log_param("probability", probability_svm)
+
+                                # Huấn luyện trực tiếp trên X_train (bỏ K-Fold cho nhanh)
+                                svm_model.fit(X_train, y_train)
+
+                                y_val_pred = svm_model.predict(X_val)
+                                val_accuracy = accuracy_score(y_val, y_val_pred)
+                                st.write(f"✅ Độ chính xác trên tập Validation: `{val_accuracy:.4f}`")
+                                mlflow.log_metric("validation_accuracy", val_accuracy)
+                                mlflow.sklearn.log_model(svm_model, "svm_model")
+
+                                st.session_state["selected_model_type"] = "SVM"
+                                st.session_state["trained_model"] = svm_model
+                                st.session_state["model_params"] = svm_model.get_params()
+                                st.success("Huấn luyện SVM hoàn tất!")
+
             else:
                 st.error("🚨 Dữ liệu chưa được phân chia. Hãy thực hiện phân chia dữ liệu trước.")
         
