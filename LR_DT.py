@@ -98,16 +98,16 @@ def run_ClassificationMinst_app():
             X = X_text
             y = y_text
             st.session_state["uploaded_data_type"] = "text"
-            st.session_state["X_original"] = X
-            st.session_state["y_original"] = y
+            st.session_state["X"] = X
+            st.session_state["y"] = y
             st.success(f"✅ Đã tải dữ liệu chữ cái với kích thước: {X.shape}")
         elif data_option == "Dữ liệu hình học (Geometric)":
             st.info("Đang sử dụng dữ liệu hình học.")
             X = X_geometric
             y = y_geometric
             st.session_state["uploaded_data_type"] = "geometric"
-            st.session_state["X_original"] = X
-            st.session_state["y_original"] = y
+            st.session_state["X"] = X
+            st.session_state["y"] = y
             st.success(f"✅ Đã tải dữ liệu hình học với kích thước: {X.shape}")
         elif data_option == "Tải lên từ file CSV":
             uploaded_file = st.file_uploader("📂 Chọn file để tải lên ", type=["csv", "txt"])
@@ -171,6 +171,19 @@ def run_ClassificationMinst_app():
                         X_temp, y_temp, test_size=val_size_adjusted, random_state=42
                     )
 
+                    # Chuẩn hóa dữ liệu nếu là dữ liệu ảnh (text hoặc geometric)
+                    if st.session_state.get("uploaded_data_type") in ["text", "geometric"]:
+                        scaler = StandardScaler()
+                        X_train = scaler.fit_transform(X_train)
+                        X_val = scaler.transform(X_val)
+                        X_test = scaler.transform(X_test)
+                        st.info("✅ Dữ liệu ảnh đã được chuẩn hóa.")
+                    else:
+                        st.info("✅ Dữ liệu CSV được giữ nguyên để huấn luyện.")
+                        X_train = X_train
+                        X_val = X_val
+                        X_test = X_test
+
                     # Hiển thị kết quả phân chia
                     total_samples = X.shape[0]
                     train_percent = (X_train.shape[0] / total_samples) * 100
@@ -198,10 +211,12 @@ def run_ClassificationMinst_app():
             if "X_train" in st.session_state:
                 X_train = st.session_state["X_train"]
                 y_train = st.session_state["y_train"]
+                X_test = st.session_state["X_test"]
+                y_test = st.session_state["y_test"]
                 X_val = st.session_state["X_val"]
                 y_val = st.session_state["y_val"]
 
-                model_option = st.radio("🔹 Chọn mô hình huấn luyện:", ("Decision Tree", "SVM"))
+                model_option = st.radio("🔹 Chọn mô hình huấn luyện:", ("Decision Tree", "Logictic Regression"))
                 if model_option == "Decision Tree":
                     st.subheader("🌳 Decision Tree Classifier")
                     max_depth = st.slider("Chọn độ sâu tối đa của cây:", min_value=1, max_value=20, value=5)
@@ -259,7 +274,68 @@ def run_ClassificationMinst_app():
                                 st.write(f"✅ **Độ chính xác trung bình từ K-Fold Cross-Validation ({n_folds} folds):** `{mean_cv_accuracy:.4f} ± {std_cv_accuracy:.4f}`")
                                 st.write(f"✅ **Độ chính xác trên tập validation:** `{accuracy_dt:.4f}`")
                             mlflow.end_run()
-                # Thêm logic tương tự cho các mô hình khác (SVM, Logistic Regression) nếu cần
+
+                # Thêm logic tương tự cho các mô hình khác ( Logistic Regression) nếu cần
+                elif model_option == "Logistic Regression":
+                    st.subheader("Logistic Regression")
+                    C = st.slider("Chọn giá trị C (Inverse of Regularization Strength):", min_value=0.01, max_value=10.0, value=1.0, step=0.01)
+                    solver = st.selectbox("Chọn solver:", ("newton-cg", "lbfgs", "liblinear", "sag", "saga"))
+                    n_folds = st.slider("Chọn số folds cho K-Fold Cross-Validation:", min_value=2, max_value=10, value=5)
+
+                    if st.button("🚀 Huấn luyện mô hình Logistic Regression"):
+                        with st.spinner("Đang huấn luyện mô hình Logistic Regression..."):
+                            with mlflow.start_run():
+                                lr_model = LogisticRegression(C=C, solver=solver, random_state=42, max_iter=1000)
+                                kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+                                cv_scores = []
+
+                                progress_bar = st.progress(0)
+                                progress_text = st.empty()
+                                total_folds = n_folds
+
+                                for i, (train_index, val_index) in enumerate(kf.split(X_train)):
+                                    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+                                    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+                                    lr_model.fit(X_train_fold, y_train_fold)
+                                    y_val_pred_fold = lr_model.predict(X_val_fold)
+                                    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_fold)
+                                    cv_scores.append(fold_accuracy)
+
+                                    progress = (i + 1) / total_folds
+                                    progress_bar.progress(progress)
+                                    progress_text.text(f"Tiến trình huấn luyện: {int(progress * 100)}%")
+
+                                mean_cv_accuracy = np.mean(cv_scores)
+                                std_cv_accuracy = np.std(cv_scores)
+
+                                lr_model.fit(X_train, y_train)
+                                y_val_pred_lr = lr_model.predict(X_val)
+                                accuracy_lr = accuracy_score(y_val, y_val_pred_lr)
+
+                                mlflow.log_param("model_type", "Logistic Regression")
+                                mlflow.log_param("C", C)
+                                mlflow.log_param("solver", solver)
+                                mlflow.log_param("n_folds", n_folds)
+                                mlflow.log_metric("mean_cv_accuracy", mean_cv_accuracy)
+                                mlflow.log_metric("std_cv_accuracy", std_cv_accuracy)
+                                mlflow.log_metric("accuracy", accuracy_lr)
+                                mlflow.sklearn.log_model(lr_model, "logistic_regression_model")
+
+                                st.session_state["selected_model_type"] = "Logistic Regression"
+                                st.session_state["trained_model"] = lr_model
+                                st.session_state["lr_C"] = C
+                                st.session_state["lr_solver"] = solver
+                                st.session_state["n_folds"] = n_folds
+
+                                st.markdown("---")
+                                st.write(f"🔹Mô hình được chọn để đánh giá: `{model_option}`")
+                                st.write("🔹 Tham số mô hình:")
+                                st.write(f"- **C (Inverse Regularization)**: `{C}`")
+                                st.write(f"- **Solver**: `{solver}`")
+                                st.write(f"- **Số folds trong Cross-Validation**: `{n_folds}`")
+                                st.write(f"✅ **Độ chính xác trung bình từ K-Fold Cross-Validation ({n_folds} folds):** `{mean_cv_accuracy:.4f} ± {std_cv_accuracy:.4f}`")
+                                st.write(f"✅ **Độ chính xác trên tập validation:** `{accuracy_lr:.4f}`")
+                            mlflow.end_run()
             else:
                 st.error("🚨 Dữ liệu chưa được phân chia. Hãy thực hiện phân chia dữ liệu trước.")
         
